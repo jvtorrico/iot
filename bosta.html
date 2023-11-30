@@ -1,0 +1,126 @@
+#include <ESP8266WiFi.h>
+    #include <ESP8266WebServer.h>
+    
+    ESP8266WebServer server(80);
+    
+    int piezoPin = D1; // Conecte o piezo ao pino D1 no ESP8266
+    
+    void setup() {
+      Serial.begin(115200);
+      
+      pinMode(piezoPin, OUTPUT);
+    
+      // Configurar a conexão Wi-Fi
+      WiFi.begin("NomeDaSuaRedeWiFi", "SuaSenhaWiFi");
+      while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Conectando ao WiFi...");
+      }
+      
+      Serial.println("Conectado ao WiFi");
+    
+      // Configurar rotas para a página HTML
+      server.on("/", HTTP_GET, handleRoot);
+      server.on("/color", HTTP_GET, handleColor);
+    
+      server.begin();
+      Serial.println("Servidor iniciado");
+    }
+    
+    void loop() {
+      server.handleClient();
+    }
+    
+    void handleRoot() {
+      // Servir a página HTML
+      server.send(200, "text/html", getPage());
+    }
+    
+    void handleColor() {
+      // Obter a cor e acionar o piezo
+      String color = server.arg("color");
+      playNote(color);
+      
+      // Responder com a nota musical
+      server.send(200, "text/plain", mapColorToNote(color));
+    }
+    
+    void playNote(String color) {
+      // Mapear a cor para a frequência (exemplo simplificado)
+      int frequency = mapColorToFrequency(color);
+    
+      // Emitir a frequência no piezo
+      tone(piezoPin, frequency, 100); // 100 ms de duração (ajuste conforme necessário)
+    }
+    
+    int mapColorToFrequency(String color) {
+      // Mapear cores para frequências (exemplo simplificado)
+      // Certifique-se de ajustar essas associações conforme necessário
+      if (color == "rgb(148, 0, 211)") return 262; // G
+      if (color == "rgb(75, 0, 130)") return 294; // A
+      if (color == "rgb(0, 0, 255)") return 330; // B
+      if (color == "rgb(0, 128, 0)") return 349; // C
+      if (color == "rgb(255, 255, 0)") return 392; // D
+      if (color == "rgb(255, 165, 0)") return 440; // E
+      if (color == "rgb(255, 0, 0)") return 494; // F
+      if (color == "rgb(0, 0, 0)") return 523; // C#
+      if (color == "rgb(255, 255, 255)") return 587; // D#
+      
+      return 0; // Valor padrão caso a cor não seja mapeada
+    }
+    
+    String getPage() {
+      // Retornar a página HTML
+      return R"(
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Identificar Cores com Notas Musicais</title>
+        </head>
+        <body>
+            <div id="colorDiv" style="width: 200px; height: 200px; margin: 50px auto; border: 1px solid #000;" onmousemove="identifyColor(event)"></div>
+            <div id="noteDisplay"></div>
+            <script>
+                function identifyColor(event) {
+                    const x = event.clientX;
+                    const y = event.clientY;
+                    const colorDiv = document.getElementById('colorDiv');
+                    const pixel = getColorAtPoint(colorDiv, x, y);
+                    console.log(pixel);
+                    const note = mapColorToNote(pixel);
+                    document.getElementById('noteDisplay').innerText = `Nota Musical: ${note}`;
+                    
+                    // Enviar a cor para o servidor no ESP8266
+                    fetch(`/color?color=${encodeURIComponent(pixel)}`);
+                }
+    
+                function getColorAtPoint(element, x, y) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1;
+                    canvas.height = 1;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(element, x, y, 1, 1, 0, 0, 1, 1);
+                    const pixelData = ctx.getImageData(0, 0, 1, 1).data;
+                    return `rgb(${pixelData[0]}, ${pixelData[1]}, ${pixelData[2]})`;
+                }
+    
+                function mapColorToNote(color) {
+                    if (color === 'rgb(148, 0, 211)') return 'G - Violeta';
+                    if (color === 'rgb(75, 0, 130)') return 'A - Índigo';
+                    if (color === 'rgb(0, 0, 255)') return 'B - Azul';
+                    if (color === 'rgb(0, 128, 0)') return 'C - Verde';
+                    if (color === 'rgb(255, 255, 0)') return 'D - Amarelo';
+                    if (color === 'rgb(255, 165, 0)') return 'E - Laranja';
+                    if (color === 'rgb(255, 0, 0)') return 'F - Vermelho';
+                    if (color === 'rgb(0, 0, 0)') return 'C# - Preto';
+                    if (color === 'rgb(255, 255, 255)') return 'D# - Branco';
+                    return 'N/A';
+                }
+            </script>
+        </body>
+        </html>
+      )";
+    }
+    
